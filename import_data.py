@@ -6,7 +6,7 @@ from datetime import datetime
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "weather_api_project.settings")
 django.setup()
 from api.models import WeatherRecord
-
+# https://www.kaggle.com/datasets/rohitgrewal/weather-data
 
 def import_weather():
     file_path = "weather_data.csv"

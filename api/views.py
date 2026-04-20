@@ -11,23 +11,37 @@ import json
 # 查询或者提交天气记录
 @csrf_exempt
 def weather_list(request):
-    # 端点 1: 获取所有天气数据 (Read)
     if request.method == 'GET':
         data = list(WeatherRecord.objects.all().values())
         return JsonResponse(data, safe=False)
 
     elif request.method == 'POST':
-        body = json.loads(request.body)
-        new_record = WeatherRecord.objects.create(
-            date_time=body['date_time'],
-            temp_c=body['temp_c'],
-            humidity=body['humidity'],
-            wind_speed=body['wind_speed'],
-            visibility=body['visibility'],
-            pressure=body['pressure'],
-            condition=body['condition']
-        )
-        return JsonResponse({"id": new_record.id, "status": "created"}, status=201)
+        try:
+            body = json.loads(request.body)
+
+            # 检查必填字段是否存在
+            required_fields = ['date_time', 'temp_c', 'humidity', 'wind_speed', 'visibility', 'pressure', 'condition']
+            for field in required_fields:
+                if field not in body:
+                    return JsonResponse({"error": f"Missing field: {field}"}, status=400)
+
+            # 逻辑数值校验
+            if not (0 <= float(body['humidity']) <= 100):
+                return JsonResponse({"error": "Humidity must be between 0 and 100"}, status=400)
+
+            new_record = WeatherRecord.objects.create(
+                date_time=body['date_time'],
+                temp_c=body['temp_c'],
+                humidity=body['humidity'],
+                wind_speed=body['wind_speed'],
+                visibility=body['visibility'],
+                pressure=body['pressure'],
+                condition=body['condition']
+            )
+            return JsonResponse({"id": new_record.id, "status": "created"}, status=201)
+
+        except (json.JSONDecodeError, ValueError) as e:
+            return JsonResponse({"error": "Invalid data format"}, status=400)
 
     return HttpResponseNotAllowed(['GET', 'POST'])
 
@@ -80,24 +94,21 @@ def weather_search(request):
         temp_min = request.GET.get('temp_min')
         temp_max = request.GET.get('temp_max')
 
-
-
         queryset = WeatherRecord.objects.all()
-        if condition:
-            queryset = queryset.filter(condition__icontains=condition)
-        if temp_min:
-            queryset = queryset.filter(temp_c__gte=float(temp_min))
-        if temp_max:
-            queryset = queryset.filter(temp_c__lte=float(temp_max))
-        data = list(queryset.values())
 
-        # 返回结果及其元数据
+        try:
+            if condition:
+                queryset = queryset.filter(condition__icontains=condition)
+            if temp_min:
+                # 尝试转换，失败会跳到 except
+                queryset = queryset.filter(temp_c__gte=float(temp_min))
+            if temp_max:
+                queryset = queryset.filter(temp_c__lte=float(temp_max))
+        except ValueError:
+            return JsonResponse({"error": "temp_min and temp_max must be numbers"}, status=400)
+
+        data = list(queryset.values())
         return JsonResponse({
             "count": len(data),
-            "filters_applied": {
-                "condition": condition,
-                "temp_min": temp_min,
-                "temp_max": temp_max
-            },
             "results": data
         }, safe=False)

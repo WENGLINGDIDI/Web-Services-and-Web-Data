@@ -1,3 +1,4 @@
+from django.db.models import Avg, Max, Min
 from django.shortcuts import render
 
 # Create your views here.
@@ -6,6 +7,8 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import WeatherRecord
 import json
 
+
+# 查询或者提交天气记录
 @csrf_exempt
 def weather_list(request):
     # 端点 1: 获取所有天气数据 (Read)
@@ -28,6 +31,7 @@ def weather_list(request):
 
     return HttpResponseNotAllowed(['GET', 'POST'])
 
+# 修改天气记录的属性
 @csrf_exempt
 def weather_detail(request, pk):
     try:
@@ -55,3 +59,45 @@ def weather_detail(request, pk):
     elif request.method == 'DELETE':
         record.delete()
         return JsonResponse({"status": "deleted"}, status=204)
+
+# 查询气温统计数据
+@csrf_exempt
+def weather_temStats(request):
+    if request.method == 'GET':
+        stats = WeatherRecord.objects.aggregate(
+            avg_temp=Avg('temp_c'),
+            max_temp=Max('temp_c'),
+            min_temp=Min('temp_c'),
+            avg_humidity=Avg('humidity')
+        )
+        return JsonResponse(stats)
+
+# 筛选天气
+@csrf_exempt
+def weather_search(request):
+    if request.method == 'GET':
+        condition = request.GET.get('condition')
+        temp_min = request.GET.get('temp_min')
+        temp_max = request.GET.get('temp_max')
+
+
+
+        queryset = WeatherRecord.objects.all()
+        if condition:
+            queryset = queryset.filter(condition__icontains=condition)
+        if temp_min:
+            queryset = queryset.filter(temp_c__gte=float(temp_min))
+        if temp_max:
+            queryset = queryset.filter(temp_c__lte=float(temp_max))
+        data = list(queryset.values())
+
+        # 返回结果及其元数据
+        return JsonResponse({
+            "count": len(data),
+            "filters_applied": {
+                "condition": condition,
+                "temp_min": temp_min,
+                "temp_max": temp_max
+            },
+            "results": data
+        }, safe=False)
